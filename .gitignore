@@ -1,0 +1,15 @@
+# Security (NEVER UPLOAD THESE)
+.env
+.DS_Store
+
+# Python & System Junk
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Database & Media (Keep these local only)
+data/clinic.db
+data/*.ogg
+data/*.mp3
+data/*.wav
