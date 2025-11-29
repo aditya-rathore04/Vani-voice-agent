@@ -1,6 +1,8 @@
 # app/ai_engine.py
 import os
 import json
+import re
+from datetime import datetime  # <--- NEW IMPORT
 from groq import Groq
 from dotenv import load_dotenv
 from app.database import get_doctor_info  # The tool we made in Part A
@@ -9,30 +11,30 @@ load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# 1. The Persona (System Prompt)
-# We tell Llama 3 exactly how to behave and how to use tools.
-SYSTEM_PROMPT = """
-You are Vani, a helpful receptionist at City Health Clinic.
-Your goal is to answer patient queries about doctor availability.
+def chat_with_llama(user_text, history=[]):
+    # 1. Get Current Time
+    current_time = datetime.now().strftime("%A, %I:%M %p") # e.g., "Saturday, 06:30 PM"
+    
+    # 2. Dynamic System Prompt
+    system_prompt_text = f"""
+    You are Vani, a helpful receptionist at City Health Clinic.
+    Current Time: {current_time}
+    
+    GOAL: Answer patient queries about doctor availability.
 
-TOOLS AVAILABLE:
-- You can check doctor schedules.
+    RULES:
+    1. CHECK HISTORY FIRST: If the user asks a follow-up (e.g., "Is she there?", "What about now?"), use the data you ALREADY found in the previous turn. DO NOT call a tool again unless necessary.
+    2. Enforce "Enquiry Only": You cannot book appointments.
+    3. Keep answers concise and natural. Don't repeat the full schedule if the user just wants a "Yes/No".
 
-INSTRUCTIONS:
-1. If the user asks for a doctor (e.g., "Is Dr. Sharma in?", "Cardiologist available?"), 
-   you MUST output a JSON object: {"tool": "check_doctor", "name": "extracted_name"}
-   
-2. If the user asks a general question (e.g., "Hi", "Where are you?"), 
-   just reply normally as text. Do NOT output JSON.
+    TOOLS:
+    - Search Doctor/Specialty: Output JSON {{"tool": "check_doctor", "name": "keyword"}}
+    - Check ALL availability: Output JSON {{"tool": "check_doctor", "name": "all"}}
+    - Output ONLY JSON if using a tool.
+    """
 
-3. If you get DATA back from a tool, summarize it nicely for the user in their language.
-"""
-
-def chat_with_llama(user_text):
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_text}
-    ]
+    # 3. Add System Prompt to Messages
+    messages = [{"role": "system", "content": system_prompt_text}] + history + [{"role": "user", "content": user_text}]    
 
     # Call 1: Ask Llama what to do (Think)
     response = client.chat.completions.create(
@@ -54,20 +56,30 @@ def chat_with_llama(user_text):
             print(f"🛠️ AI is calling tool for: {doctor_name}")
             db_result = get_doctor_info(doctor_name)
             
-            if db_result:
-                # Feed data back to Llama for the final answer
+            if "error" in db_result and db_result["error"] == "not_found":
+                # The DB search failed. We give this info to Llama.
+                valid_list = ", ".join(db_result["valid_departments"])
+                
+                tool_msg = f"TOOL RESULT: No doctor or specialty found matching '{doctor_name}'. Available Departments are: {valid_list}. Inform the user politely."
+                
                 final_messages = messages + [
                     {"role": "assistant", "content": ai_reply},
-                    {"role": "system", "content": f"TOOL RESULT: {json.dumps(db_result)}. Now answer the user."}
+                    {"role": "user", "content": tool_msg}
                 ]
-                final_response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=final_messages
-                )
-                return final_response.choices[0].message.content
+                
             else:
-                return f"Sorry, I couldn't find a doctor named {doctor_name} in our system."
-
+                # Success! We found data.
+                final_messages = messages + [
+                    {"role": "assistant", "content": ai_reply},
+                    {"role": "user", "content": f"TOOL RESULT: {json.dumps(db_result)}"}
+                ]
+            
+            # Generate the final answer (Success OR Failure)
+            final_response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=final_messages
+            )
+            return final_response.choices[0].message.content
         except Exception as e:
             print(f"❌ JSON Parsing Error: {e}")
             return "I'm having trouble checking the schedule right now."
