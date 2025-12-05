@@ -16,9 +16,13 @@ def get_doctor_info(query_str):
     cursor.execute("SELECT DISTINCT department FROM schedule")
     departments = [row['department'] for row in cursor.fetchall()]
     
-    # 2. Logic: "All Doctors" request
-    # If the user asks "Who is available at 2pm?", the LLM might query "all" or "available"
-    if query_str.lower() in ["all", "anyone", "available", "doctor", "doctors"]:
+    # OLD CODE:
+    # if query_str.lower() in ["all", "anyone", "available", "doctor", "doctors"]:
+
+    # NEW CODE: Check if key words exist inside the string
+    q = query_str.lower()
+    if "all" in q or "schedule" in q or "doctors" in q or "anyone" in q:
+        print("🔍 Searching for ALL doctors")
         cursor.execute("SELECT * FROM schedule")
         results = [dict(row) for row in cursor.fetchall()]
         conn.close()
@@ -61,3 +65,26 @@ def get_doctor_info(query_str):
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return {"type": "specific_result", "data": rows}
+
+# app/database.py
+
+# ... (Keep existing imports and get_doctor_info) ...
+
+def get_clinic_overview():
+    """
+    Returns a summary string of all departments and doctors.
+    Used for the System Prompt so the LLM knows what we have.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT doctor_name, department FROM schedule GROUP BY doctor_name")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    # Create a summary like: "- Cardiology (Dr. Sharma)\n- General (Dr. Anjali)"
+    overview = []
+    for name, dept in rows:
+        overview.append(f"- {dept}: {name}")
+    
+    return "\n".join(overview)

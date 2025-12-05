@@ -42,8 +42,14 @@ async def receive_message(request: Request):
                 # Fetch previous messages for this user (default to empty list)
                 user_history = CHAT_HISTORY.get(sender_id, [])
 
-                # 2. CALL BRAIN (Pass history!)
-                ai_response = chat_with_llama(user_text, user_history)
+                
+                # Default to English for text, or you can try to detect it if you want.
+                # For now, "en" is safe because most text inputs on WhatsApp are English/Hinglish.
+                detected_lang = "en" 
+
+                # 2. CALL BRAIN (Pass language!)
+                ai_response = chat_with_llama(user_text, detected_lang, user_history)
+                
                 print(f"🤖 Vani says: {ai_response}")
 
                 # 3. UPDATE HISTORY (Save this turn)
