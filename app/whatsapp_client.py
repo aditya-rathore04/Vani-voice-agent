@@ -1,34 +1,64 @@
+# app/whatsapp_client.py
 import os
 import requests
 from dotenv import load_dotenv
 
-# Force load the .env file
 load_dotenv()
 
-# Fetch from environment
 TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_ID = os.getenv("PHONE_NUMBER_ID")
 
-# DEBUG: Check if it loaded (Remove this line after testing)
-if not TOKEN:
-    print("❌ ERROR: .env file not found or WHATSAPP_TOKEN is missing!")
-else:
-    print(f"✅ Token Loaded successfully (Starts with {TOKEN[:5]}...)")
+def get_media_url(media_id):
+    """ Get the download link for the user's audio """
+    url = f"https://graph.facebook.com/v18.0/{media_id}"
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    response = requests.get(url, headers=headers)
+    return response.json().get("url")
 
-def send_whatsapp_message(to_number, text_body):
+def download_media_file(media_url, save_path):
+    """ Download the user's audio to our laptop """
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    response = requests.get(media_url, headers=headers)
+    with open(save_path, "wb") as f:
+        f.write(response.content)
+    return save_path
+
+def upload_media(file_path):
+    """ Upload our OGG reply to WhatsApp """
+    url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/media"
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    
+    # MIME type for OGG Voice Note
+    mime_type = "audio/ogg" 
+    
+    files = {
+        'file': (os.path.basename(file_path), open(file_path, 'rb'), mime_type)
+    }
+    data = {'messaging_product': 'whatsapp'}
+    
+    response = requests.post(url, headers=headers, files=files, data=data)
+    return response.json().get("id")
+
+def send_whatsapp_audio(to_number, media_id):
+    """ Send the uploaded audio as a reply """
     url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
     headers = {
         "Authorization": f"Bearer {TOKEN}",
         "Content-Type": "application/json"
     }
+    
     data = {
         "messaging_product": "whatsapp",
         "to": to_number,
-        "type": "text",
-        "text": {"body": text_body}
+        "type": "audio",
+        "audio": {"id": media_id}
     }
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        print(f"✅ Reply sent to {to_number}!")
-    else:
-        print(f"❌ Failed to send: {response.text}")
+    
+    requests.post(url, headers=headers, json=data)
+
+# Keep the text sending function too
+def send_whatsapp_message(to_number, text_body):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_ID}/messages"
+    headers = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    data = {"messaging_product": "whatsapp", "to": to_number, "type": "text", "text": {"body": text_body}}
+    requests.post(url, headers=headers, json=data)

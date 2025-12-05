@@ -1,4 +1,6 @@
 # app/main.py (Updated with Memory)
+from app.audio import transcribe_audio, generate_voice_note
+from app.whatsapp_client import get_media_url, download_media_file, upload_media, send_whatsapp_audio, send_whatsapp_message
 from fastapi import FastAPI, Request, Query
 import uvicorn
 import os
@@ -56,6 +58,44 @@ async def receive_message(request: Request):
                 # 4. SEND REPLY
                 send_whatsapp_message(sender_id, ai_response)
                 
+            elif message_data["type"] == "audio":
+                audio_id = message_data["audio"]["id"]
+                
+                # 1. Download
+                media_url = get_media_url(audio_id)
+                ogg_path = f"data/{sender_id}_input.ogg"
+                download_media_file(media_url, ogg_path)
+                
+                # 2. Transcribe (Ears) - NOW RETURNS LANGUAGE
+                print("👂 Transcribing...")
+                user_text, detected_lang = transcribe_audio(ogg_path) # <--- Get Lang
+                print(f"🗣️ Transcribed ({detected_lang}): {user_text}")
+                
+                # 3. Brain (LLM) - PASS LANGUAGE
+                user_history = CHAT_HISTORY.get(sender_id, [])
+                ai_response = chat_with_llama(user_text, detected_lang, user_history) # <--- Pass Lang
+                print(f"🤖 AI Reply: {ai_response}")
+                
+                # Update Memory
+                user_history.append({"role": "user", "content": user_text})
+                user_history.append({"role": "assistant", "content": ai_response})
+                CHAT_HISTORY[sender_id] = user_history[-10:]
+                
+                # 4. Speak (Mouth) - PASS LANGUAGE
+                print(f"👄 Generating Voice Note ({detected_lang})...")
+                output_ogg = f"data/{sender_id}_reply.ogg"
+                
+                # Edge-TTS will now pick the matching Kannada/Malayalam voice
+                await generate_voice_note(ai_response, detected_lang, output_ogg) 
+                
+                # 5. Delivery
+                media_id = upload_media(output_ogg)
+                send_whatsapp_audio(sender_id, media_id)
+                
+                # Cleanup
+                if os.path.exists(ogg_path): os.remove(ogg_path)
+                if os.path.exists(output_ogg): os.remove(output_ogg)
+
     except Exception as e:
         print(f"❌ ERROR: {e}")
         pass

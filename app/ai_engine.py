@@ -11,31 +11,42 @@ load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-def chat_with_llama(user_text, history=[]):
-    # 1. Get Current Time
-    current_time = datetime.now().strftime("%A, %I:%M %p") # e.g., "Saturday, 06:30 PM"
+def chat_with_llama(user_text, language_code, history=[]):
+    current_time = datetime.now().strftime("%A, %I:%M %p")
     
-    # 2. Dynamic System Prompt
+    # 📝 UPDATED PROMPT: Universal Translation Rules
     system_prompt_text = f"""
-    You are Vani, a helpful receptionist at City Health Clinic.
+    You are Vani, a receptionist at City Health Clinic.
     Current Time: {current_time}
-    
-    GOAL: Answer patient queries about doctor availability.
+    User's Language Code: {language_code} 
+
+    GOAL: Answer in the user's language, but Query the database in English.
 
     RULES:
-    1. CHECK HISTORY FIRST: If the user asks a follow-up (e.g., "Is she there?", "What about now?"), use the data you ALREADY found in the previous turn. DO NOT call a tool again unless necessary.
-    2. Enforce "Enquiry Only": You cannot book appointments.
-    3. Keep answers concise and natural. Don't repeat the full schedule if the user just wants a "Yes/No".
+    1. RESPONSE LANGUAGE: You MUST reply in the user's language ('{language_code}').
+       - 'en' -> English, 'hi' -> Hindi, 'kn' -> Kannada, 'ml' -> Malayalam.
+    
+    2. TOOL ARGUMENTS (CRITICAL): 
+       - The database is 100% ENGLISH.
+       - NEVER output Hindi/Kannada/Malayalam script inside the JSON.
+       - TRANSLATE patient terms to medical English terms.
+       
+       EXAMPLES:
+       - User (Hindi): "अंजली" -> Tool: {{"tool": "check_doctor", "name": "Anjali"}}
+       - User (Malayalam): "ഹൃദ്രോഗ വിദഗ്ധൻ" (Heart Doctor) -> Tool: {{"tool": "check_doctor", "name": "Cardiologist"}}
+       - User (Kannada): "ಚರ್ಮ ವೈದ್ಯ" (Skin Doctor) -> Tool: {{"tool": "check_doctor", "name": "Dermatologist"}}
+       - User (English): "Eye specialist" -> Tool: {{"tool": "check_doctor", "name": "Ophthalmologist"}}
+
+    3. HISTORY: Check history first. Don't call tools if you already have the answer.
+
+    4. Enforce "Enquiry Only": No bookings.
 
     TOOLS:
-    - Search Doctor/Specialty: Output JSON {{"tool": "check_doctor", "name": "keyword"}}
-    - Check ALL availability: Output JSON {{"tool": "check_doctor", "name": "all"}}
+    - Search: {{"tool": "check_doctor", "name": "english_keyword"}}
     - Output ONLY JSON if using a tool.
     """
 
-    # 3. Add System Prompt to Messages
-    messages = [{"role": "system", "content": system_prompt_text}] + history + [{"role": "user", "content": user_text}]    
-
+    messages = [{"role": "system", "content": system_prompt_text}] + history + [{"role": "user", "content": user_text}]
     # Call 1: Ask Llama what to do (Think)
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
