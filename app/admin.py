@@ -4,7 +4,7 @@ import sqlite3
 import pandas as pd
 import time
 
-st.set_page_config(page_title="Vani Clinic Admin", layout="wide")
+st.set_page_config(page_title="Vani Clinic Admin", layout="wide", page_icon="🏥")
 
 DB_PATH = "data/clinic.db"
 
@@ -17,44 +17,70 @@ def load_schedule():
 
 def save_schedule(edited_df):
     conn = sqlite3.connect(DB_PATH)
-    # Replace the old table with the new edited one
     edited_df.to_sql("schedule", conn, if_exists="replace", index=False)
     conn.close()
 
 # --- UI LAYOUT ---
 st.title("🏥 City Health Clinic - Control Center")
+st.markdown("---")
 
+# METRICS ROW (Visual Appeal)
+col1, col2, col3 = st.columns(3)
+df = load_schedule()
+total_docs = df['doctor_name'].nunique()
+on_leave = df[df['current_status'] == "ON LEAVE"].shape[0]
+
+col1.metric("Total Doctors", total_docs)
+col2.metric("Active Shifts", df.shape[0])
+col3.metric("Doctors On Leave", on_leave, delta_color="inverse")
+
+# --- TAB INTERFACE ---
 tab1, tab2 = st.tabs(["📅 Manage Schedule", "💬 Live Logs"])
 
 # === TAB 1: SCHEDULE MANAGER ===
 with tab1:
-    st.header("Doctor Availability")
-    st.info("Double-click any cell to edit. Click 'Save Changes' to update the bot instantly.")
+    st.subheader("Doctor Availability Manager")
+    st.info("💡 Tip: Use the 'Status' dropdown to quickly mark attendance.")
     
-    # Load current data
-    df = load_schedule()
-    
-    # Show editable grid
+    # ADVANCED EDITOR
+    # We configure specific columns to be read-only or dropdowns
     edited_df = st.data_editor(
         df,
-        num_rows="dynamic", # Allow adding new doctors
-        key="schedule_editor"
+        num_rows="dynamic",
+        use_container_width=True,
+        key="schedule_editor",
+        column_config={
+            "id": st.column_config.NumberColumn(disabled=True), # Lock ID
+            "doctor_name": st.column_config.TextColumn("Doctor Name"),
+            "department": st.column_config.TextColumn("Specialty"),
+            "schedule_time": st.column_config.TextColumn(
+                "Shift Timings",
+                help="e.g. 10:00 AM - 02:00 PM"
+            ),
+            "current_status": st.column_config.SelectboxColumn(
+                "Current Status",
+                help="Is the doctor in today?",
+                width="medium",
+                options=[
+                    "Available",
+                    "ON LEAVE",
+                    "Delayed (1 hr)",
+                    "Emergency Leave"
+                ],
+                required=True
+            )
+        }
     )
     
     # Save Button
     if st.button("💾 Save Changes", type="primary"):
         save_schedule(edited_df)
-        st.success("✅ Database Updated! Vani will now use this new schedule.")
+        st.success("✅ Database Updated Successfully!")
         time.sleep(1)
         st.rerun()
 
 # === TAB 2: LIVE LOGS ===
 with tab2:
     st.header("Recent Conversations")
-    
-    # We don't have a database for logs yet (we used in-memory list),
-    # so for now, we will just show a placeholder or read from a log file if we add one.
-    # For Phase 4, let's just show the Schedule logic first.
-    st.warning("Live logs require a persistent database (coming in v2).")
-    
-    # Optional: You can create a 'logs' table in SQLite later to populate this.
+    st.warning("Feature coming soon: Persistent Log Database integration.")
+    st.markdown("*Currently, logs are visible in the VS Code Terminal.*")

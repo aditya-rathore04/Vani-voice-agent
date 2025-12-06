@@ -2,7 +2,6 @@
 import sqlite3
 import os
 
-# Ensure the data folder exists
 os.makedirs("data", exist_ok=True)
 DB_PATH = "data/clinic.db"
 
@@ -10,21 +9,22 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # 1. Reset: Drop old tables if they exist (Fresh start)
     cursor.execute("DROP TABLE IF EXISTS schedule")
     
-    # 2. Create Table: Simple structure for an Enquiry Bot
+    # NEW SCHEMA: Separate Time and Status
     cursor.execute("""
     CREATE TABLE schedule (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         doctor_name TEXT,
         department TEXT,
         day TEXT,
-        availability TEXT
+        schedule_time TEXT,       -- e.g., "10:00 AM - 02:00 PM" (Fixed)
+        current_status TEXT DEFAULT 'Available' -- e.g., "Available", "On Leave", "Emergency"
     )
     """)
     
-    # 3. Add Dummy Data (Indian Context)
+    # Data now maps to (name, dept, day, schedule_time)
+    # status defaults to 'Available' automatically
     doctors = [
         ("Dr. Sharma", "Cardiology", "Monday", "10:00 AM - 02:00 PM"),
         ("Dr. Sharma", "Cardiology", "Wednesday", "10:00 AM - 02:00 PM"),
@@ -34,11 +34,11 @@ def init_db():
         ("Dr. Khan", "Neurology", "Thursday", "04:00 PM - 08:00 PM")
     ]
     
-    cursor.executemany("INSERT INTO schedule (doctor_name, department, day, availability) VALUES (?, ?, ?, ?)", doctors)
+    cursor.executemany("INSERT INTO schedule (doctor_name, department, day, schedule_time) VALUES (?, ?, ?, ?)", doctors)
     
     conn.commit()
     conn.close()
-    print(f"✅ Database initialized at {DB_PATH} with {len(doctors)} entries.")
+    print(f"✅ Database upgrade complete: Added 'current_status' column.")
 
 if __name__ == "__main__":
     init_db()

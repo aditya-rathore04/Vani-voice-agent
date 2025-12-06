@@ -75,15 +75,62 @@ def get_doctor_info(query_str):
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
-    # --- NEW LOGIC: CHECK FOR LEAVE ---
-    # We loop through results to flag if they are on leave
+   # --- UPDATED LOGIC: COMBINE TIME & STATUS ---
+    final_data = []
+    
     for row in rows:
-        availability = row.get("availability", "").upper()
-        if "LEAVE" in availability or "ABSENT" in availability or "UNAVAILABLE" in availability:
-            # We explicitly mark this in the data returned to the LLM
-            row["status"] = "ON_LEAVE" 
-            row["note"] = "This doctor is currently NOT available."
+        # Get raw values
+        time_slot = row.get("schedule_time", "Unknown")
+        status = row.get("current_status", "Available")
+        
+        # Logic to decide what the LLM sees
+        if status.upper() != "AVAILABLE":
+            # If on leave, override the message to be very clear
+            availability_msg = f"Currently {status} (Standard Time: {time_slot})"
+            is_active = False
         else:
-            row["status"] = "AVAILABLE"
+            # If available, just show the time
+            availability_msg = time_slot
+            is_active = True
+            
+        final_data.append({
+            "doctor": row["doctor_name"],
+            "day": row["day"],
+            "status": status,           # Explicit Status field
+            "availability": availability_msg, # Combined human-readable string
+            "is_active": is_active      # Boolean flag for ease
+        })
 
-    return {"type": "specific_result", "data": rows}
+    return {"type": "specific_result", "data": final_data}
+
+def update_doctor_schedule(doctor_name, new_status, day="ALL"):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # 1. Fuzzy Match Doctor Name
+    cursor.execute("SELECT DISTINCT doctor_name FROM schedule")
+    all_doctors = [row[0] for row in cursor.fetchall()]
+    best_match, score = process.extractOne(doctor_name, all_doctors)
+    
+    if score < 80:
+        conn.close()
+        return {"status": "error", "message": f"Could not find doctor '{doctor_name}'."}
+    
+    # 2. Update Logic
+    if day.upper() == "ALL":
+        # Update ALL days for this doctor
+        cursor.execute("UPDATE schedule SET current_status = ? WHERE doctor_name = ?", (new_status, best_match))
+        msg = f"Updated {best_match} (All Days) to: {new_status}"
+    else:
+        # Update ONLY the specific day
+        # We use fuzzy matching for days too, to handle "Mon" vs "Monday"
+        valid_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "Daily"]
+        best_day, day_score = process.extractOne(day, valid_days)
+        
+        cursor.execute("UPDATE schedule SET current_status = ? WHERE doctor_name = ? AND day = ?", (new_status, best_match, best_day))
+        msg = f"Updated {best_match} ({best_day}) to: {new_status}"
+
+    conn.commit()
+    conn.close()
+    
+    return {"status": "success", "message": msg}

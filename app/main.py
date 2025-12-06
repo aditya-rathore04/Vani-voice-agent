@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 from app.whatsapp_client import send_whatsapp_message
 from app.ai_engine import chat_with_llama
+from app.admin_ai import process_admin_command  # <--- NEW IMPORT
 
 load_dotenv()
 app = FastAPI()
@@ -34,6 +35,32 @@ async def receive_message(request: Request):
             message_data = value["messages"][0]
             sender_id = message_data["from"]
             
+            ADMIN_NUMBER = os.getenv("ADMIN_PHONE") # Add your number to .env!
+
+            # 👑 GOD MODE CHECK
+            if sender_id == ADMIN_NUMBER:
+                print(f"👑 ADMIN COMMAND from {sender_id}")
+                
+                # Extract text from either Text or Audio message
+                command_text = ""
+                if message_data["type"] == "text":
+                    command_text = message_data["text"]["body"]
+                elif message_data["type"] == "audio":
+                    audio_id = message_data["audio"]["id"]
+                    media_url = get_media_url(audio_id)
+                    ogg_path = f"data/{sender_id}_admin.ogg"
+                    download_media_file(media_url, ogg_path)
+                    command_text, _ = transcribe_audio(ogg_path) # Ignore lang for admin
+                
+                # Process Command
+                if command_text:
+                    print(f"🔧 Command: {command_text}")
+                    response_text = process_admin_command(command_text)
+                    # Send Text Reply back to Admin (Faster/Easier)
+                    send_whatsapp_message(sender_id, f"✅ {response_text}")
+                
+                return {"status": "processed_as_admin"}
+
             if message_data["type"] == "text":
                 user_text = message_data["text"]["body"]
                 print(f"🗣️ User ({sender_id}) said: {user_text}")
