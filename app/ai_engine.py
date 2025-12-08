@@ -49,6 +49,10 @@ def chat_with_llama(user_text, language_code, history=[]):
         - The database is 100% ENGLISH.
         - NEVER output Hindi/Kannada/Malayalam script inside the JSON.
         - TRANSLATE patient terms to medical English terms.
+        - PHONETIC CORRECTION: If the user says a name that SOUNDS like a doctor in the "CLINIC OVERVIEW", use the correct doctor's name.
+          - "Swarma" / "Sarma" -> {{"tool": "check_doctor", "name": "Sharma"}}
+          - "Gupta ji" -> {{"tool": "check_doctor", "name": "Gupta"}}
+          - "Anjili" -> {{"tool": "check_doctor", "name": "Anjali"}}
         
         EXAMPLES:
         - User (Symptom): "I feel feverish" -> Tool: {{"tool": "check_doctor", "name": "General"}} 

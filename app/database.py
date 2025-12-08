@@ -48,7 +48,7 @@ def get_doctor_info(query_str):
     best_doc, doc_score = process.extractOne(query_str, doctor_names) if doctor_names else (None, 0)
     best_dept, dept_score = process.extractOne(query_str, departments) if departments else (None, 0)
     
-    threshold = 70
+    threshold = 60  # Minimum score to consider a match
     
     # Case A: Department Match
     if dept_score > threshold and dept_score > doc_score:
