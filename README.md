@@ -94,7 +94,7 @@ Copy the Forwarding URL (e.g., https://xyz.ngrok-free.app) and update your Meta 
 ```
 streamlit run app/admin.py
 ```
-Access the dashboard at http://localhost:8501
+
 ##🧪 Usage Examples
 ### Patient Mode (Any Number)
 * 🎤 Voice Note: "Is Dr. Sharma available tomorrow?"
