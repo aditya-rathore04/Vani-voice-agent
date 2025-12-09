@@ -45,16 +45,16 @@ async def generate_voice_note(text, language_code, output_ogg_path):
     # Select Voice (Default to English if language not found)
     selected_voice = VOICE_MAP.get(language_code, "en-IN-NeerjaNeural")
     print(f"👄 Speaking in: {selected_voice}")
-
-    # Remove newlines and excess spaces that crash Edge-TTS
-    clean_text = " ".join(text.split()) 
+    
+    # 🧹 FIX: CLEAN THE TEXT
+    # Remove newlines (\n) and extra spaces to prevent TTS crash
+    clean_text = " ".join(text.split())
     
     if not clean_text:
         print("❌ Error: TTS received empty text.")
         return None
 
-    # ... (Rest of the function logic: Select Voice, Communicate, Convert) ...
-    
+    # Use 'clean_text' here instead of 'text'
     communicate = edge_tts.Communicate(clean_text, selected_voice)
     await communicate.save(temp_mp3)
     
